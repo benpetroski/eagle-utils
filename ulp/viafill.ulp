@@ -1,0 +1,115 @@
+real vertx[];
+real verty[];
+int nvert;
+int pnpoly(real testx, real testy)
+{
+//PIP algorithm adapted from:
+//http://stackoverflow.com/questions/217578/point-in-polygon-aka-hit-test/2922778#2922778
+  int i, j, c = 0;
+  for (i = 0, j = nvert-1; i < nvert; j = i++) {
+    if ( ((verty[i]>testy) != (verty[j]>testy)) &&
+     (testx < (vertx[j]-vertx[i]) * (testy-verty[i]) / (verty[j]-verty[i]) + vertx[i]) )
+     {
+     	c = !c;
+     }
+       
+  }
+  return c;
+}
+
+
+
+
+
+if (argc != 5 && argc !=4 && argc != 6 )
+{
+	string ss="";
+	sprintf(ss,"Usage: %s <polygon_name to viafill> <net to add to> <viasize(mm)> [<visspace(mm)>] [PACK]\nNote: [] are optional params, PACK means hexagonal closest packing", argv[0]);
+	dlgMessageBox(ss);
+	exit(1);
+}
+string net_name =argv[2];
+real viasize=strtod(argv[3]);
+real viaspace=(argc>=5&&strtod(argv[4])!=0)?strtod(argv[4]):2*viasize;
+int should_pack=strupr(argv[argc-1])=="PACK"?1:0;
+if (viaspace <0 || viaspace <0 || viaspace < viasize)
+{
+	string ss="";
+	sprintf(ss,"bad instance param size=%f mm space=%f mm\n",viasize,viaspace);
+	dlgMessageBox(ss);
+	exit(1);
+}
+board(B) {
+string s;
+string cmd = "";
+sprintf(cmd,"grid mm; change drill %f; change diameter auto; ",viasize);
+
+B.signals(S) {
+	S.polygons(P) {
+		if(S.name==argv[1]){
+			int minx=999999999;
+			int maxx=-minx;
+			int miny=minx;
+			int maxy=maxx;
+			 nvert=0;
+			P.wires(W) {
+				nvert++;
+				int x=W.x1;
+				int y=W.y1;
+				minx=min(x,minx);
+				maxx=max(x,maxx);
+				miny=min(y,miny);
+				maxy=max(y,maxy);
+			}
+
+			int vert_index=0;
+			P.wires(W) {
+				vertx[vert_index]=u2mm(W.x1);
+				verty[vert_index]=u2mm(W.y1);
+				vert_index++;
+			}
+			real xstart=u2mm(minx+1);
+			real xend=u2mm(maxx);
+			real ystart=u2mm(miny+1);
+			real yend=u2mm(maxy);
+			real xviaspace=viaspace;
+			real yviaspace=viaspace;
+			int yoffsetv=0;
+			real yoffs[];
+			yoffs[0]=0;
+			yoffs[1]=0;
+
+			if (should_pack)
+			{
+				xviaspace=viaspace/2;
+				yviaspace=sqrt(3)*viaspace;
+				yoffs[1]=sqrt(3)/2*viaspace;
+			}
+			
+			for(real x=xstart;x<xend;x+=xviaspace)
+			{
+				for(real y=ystart+yoffs[yoffsetv];y<yend;y+=yviaspace)
+				{
+					if(pnpoly(x,y))
+					{
+						sprintf(s,"via '%s' Round (%f %f); ",net_name, (x),(y));
+						cmd+=s;
+					}
+					
+				}
+				yoffsetv=(yoffsetv+1)%2;
+			}
+		//delete P
+			for (int g=0;g<nvert-2;g++)
+			{
+				sprintf(s,"delete (%f %f); ",vertx[g],verty[g]);
+				cmd+=s;
+			}
+		}
+	}
+}
+cmd += "grid last;";
+//dlgMessageBox(cmd);
+exit(cmd);
+}
+
